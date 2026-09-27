@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "短视频收藏播放器",
+  "version": "4.0.0",
+  "description": "挑选本地短视频文件，自动生成缩略图并连续播放。支持拖放、搜索、右键删除、自定义壁纸等。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "短视频收藏播放器",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "unlimitedStorage"]
+}

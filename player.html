@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>短视频收藏播放器</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='5' fill='%23E0A02F'/%3E%3Cpath d='M9.5 7.5v9l7.5-4.5z' fill='%23131210'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#121114; --bg2:#1a191d; --bg3:#222127;
+    --ink:#f2efe9; --ink-dim:#a9a49b; --ink-faint:#6f6b66;
+    --line:#2c2a30; --accent:#E0A02F; --accent-soft:rgba(224,160,47,.14);
+    --r:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    overflow:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input{font:inherit}
+
+  .app{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:100vh;height:100vh;overflow:hidden}
+  .panel{min-width:0;min-height:0;display:flex;flex-direction:column}
+
+  /* ===== 左侧：播放器 ===== */
+  .player-panel{background:#0b0a0d;border-right:1px solid var(--line);position:relative}
+  .stage{flex:1;position:relative;min-height:0;display:flex;align-items:center;justify-content:center;background:#0b0a0d}
+  .stage video{width:100%;height:100%;object-fit:contain;background:#000;display:block;cursor:pointer}
+  .nowtag{position:absolute;top:14px;left:14px;display:flex;align-items:center;gap:8px;
+    background:rgba(0,0,0,.55);padding:6px 12px;border-radius:999px;font-size:12px;color:var(--ink-dim);
+    backdrop-filter:blur(4px)}
+  .nowtag b{color:var(--accent);font-weight:600}
+  .mute-btn{position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;
+    background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .mute-btn:hover{background:rgba(0,0,0,.8)}
+  .sound-hint{position:absolute;left:50%;bottom:20%;transform:translateX(-50%);z-index:5;
+    background:rgba(224,160,47,.95);color:#131210;padding:11px 22px;border-radius:999px;
+    font-size:14px;font-weight:600;box-shadow:0 6px 22px rgba(0,0,0,.5);white-space:nowrap}
+  .sound-hint:hover{filter:brightness(1.1)}
+
+  .meta{padding:12px 18px 8px}
+  .meta .fname{font-size:14px;color:var(--ink);word-break:break-all;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+  .meta .fname .idx{color:var(--accent);font-weight:600;margin-right:8px}
+  .controls{display:flex;align-items:center;gap:10px;padding:8px 18px 14px}
+  .ctrl-btn{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;border-radius:10px;
+    background:var(--bg3);border:1px solid var(--line);font-size:13px;transition:.15s}
+  .ctrl-btn:hover{background:#2b2930;border-color:#3a373f}
+  .ctrl-btn svg{width:15px;height:15px}
+  .spacer{flex:1}
+  .count{font-size:12px;color:var(--ink-faint)}
+
+  /* ===== 播放进度条 ===== */
+  .timeline{display:flex;align-items:center;gap:10px;padding:2px 18px 4px}
+  .timeline .t{font-size:11px;color:var(--ink-dim);font-variant-numeric:tabular-nums;min-width:40px;text-align:center}
+  .seek{-webkit-appearance:none;appearance:none;flex:1;height:6px;border-radius:3px;
+    background:var(--line);outline:none;cursor:pointer}
+  .seek::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+    background:var(--accent);border:2px solid #131210}
+  .seek::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid #131210}
+  .seek::-moz-range-track{height:6px;border-radius:3px;background:var(--line)}
+
+  /* ===== 底部控制栏（自动隐藏，悬浮覆盖在画面上） ===== */
+  .bottom-ui{position:absolute;left:0;right:0;bottom:0;z-index:3;opacity:0;transform:translateY(100%);
+    pointer-events:none;transition:opacity .22s ease, transform .22s ease;
+    background:linear-gradient(transparent, rgba(0,0,0,.72))}
+  .bottom-ui.show{opacity:1;transform:translateY(0);pointer-events:auto}
+
+  /* ===== 右侧：缩略图墙 ===== */
+  .wall-panel{background:var(--bg)}
+  .wall-head{padding:14px 18px 12px;display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line)}
+  .wall-head h1{font-size:16px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
+  .wall-head h1 .dot{color:var(--accent)}
+  .search{flex:1;min-width:0;position:relative}
+  .search input{width:100%;padding:8px 12px 8px 34px;border-radius:9px;background:var(--bg2);
+    border:1px solid var(--line);color:var(--ink);font-size:13px;outline:none}
+  .search input:focus{border-color:var(--accent)}
+  .search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--ink-faint)}
+  .wall-head .n{font-size:12px;color:var(--ink-faint);white-space:nowrap}
+  .pick-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;
+    background:var(--accent);color:#131210;font-size:13px;font-weight:600;white-space:nowrap}
+  .pick-btn:hover{filter:brightness(1.08)}
+  .pick-btn svg{width:15px;height:15px}
+  .pick-btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .pick-btn.alt:hover{background:var(--bg3);filter:none}
+  .big.alt{background:var(--bg3);color:var(--ink);border:1px solid var(--line)}
+  .big.alt:hover{background:#2b2930}
+  .wall-scroll{flex:1;overflow-y:auto;padding:16px 18px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
+  .card{position:relative;border-radius:var(--r);overflow:hidden;background:var(--bg3);
+    border:1px solid var(--line);cursor:pointer;transition:border-color .15s, transform .1s;outline:none}
+  .card:hover{border-color:#3f3b45;transform:translateY(-1px)}
+  .card .poster{aspect-ratio:9/16;width:100%;object-fit:cover;display:block;background:#0a090c}
+  .card .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--ink-faint)}
+  .card .ph svg{width:26px;height:26px;opacity:.5}
+  .card .cap{position:absolute;left:0;right:0;bottom:0;padding:18px 8px 7px;font-size:11px;color:var(--ink);
+    background:linear-gradient(transparent,rgba(0,0,0,.85));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .seq{position:absolute;top:6px;left:6px;font-size:10px;color:var(--ink);background:rgba(0,0,0,.55);
+    padding:2px 6px;border-radius:6px;z-index:2}
+  .card.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .card.active::after{content:"▶";position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;
+    background:var(--accent);color:#131210;display:flex;align-items:center;justify-content:center;font-size:10px;z-index:2}
+  .card .del-btn{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;
+    background:rgba(224,104,104,.92);color:#fff;display:flex;align-items:center;justify-content:center;
+    font-size:14px;line-height:1;z-index:3;opacity:0;pointer-events:none;transition:opacity .15s}
+  .card:hover .del-btn{opacity:1;pointer-events:auto}
+  .card .del-btn:hover{background:rgba(224,104,104,1)}
+  .empty{padding:40px 0;text-align:center;color:var(--ink-faint);font-size:13px;grid-column:1/-1}
+
+  /* ===== 右键菜单 ===== */
+  .ctxmenu{position:fixed;z-index:30;min-width:180px;background:var(--bg3);border:1px solid var(--line);
+    border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+  .ctxmenu .ctx-item{padding:9px 12px;font-size:13px;border-radius:7px;cursor:pointer}
+  .ctxmenu .ctx-item:hover{background:#2b2930}
+  .ctxmenu .ctx-item.danger{color:#e06868}
+  .ctxmenu .ctx-item.off{color:var(--ink-faint);cursor:not-allowed}
+  .ctxmenu .ctx-item.off:hover{background:transparent}
+
+  /* ===== 空态 / 拖放遮罩 ===== */
+  .overlay{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+    background:rgba(18,17,20,.72);backdrop-filter:blur(4px)}
+  .overlay.show{display:flex}
+  .overlay.dragging{background:rgba(224,160,47,.16);border:3px dashed var(--accent)}
+  .welcome{max-width:460px;text-align:center;padding:20px}
+  .welcome .icon{width:72px;height:72px;border-radius:20px;background:var(--bg3);border:1px solid var(--line);
+    display:inline-flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:22px}
+  .welcome h2{font-size:22px;font-weight:700;margin-bottom:10px}
+  .welcome p{color:var(--ink-dim);font-size:14px;line-height:1.7;margin-bottom:26px}
+  .welcome p b{color:var(--accent)}
+  .welcome .big{font-size:15px;padding:12px 28px;border-radius:12px;background:var(--accent);color:#131210;
+    font-weight:600;display:inline-flex;align-items:center;gap:8px}
+  .welcome .big:hover{filter:brightness(1.08)}
+  .welcome .tip{margin-top:18px;font-size:12px;color:var(--ink-faint)}
+
+  .scrollbar::-webkit-scrollbar{width:10px}
+  .scrollbar::-webkit-scrollbar-thumb{background:#333137;border-radius:8px;border:2px solid var(--bg)}
+  .scrollbar::-webkit-scrollbar-thumb:hover{background:#423f48}
+
+  /* ===== 启动首页 ===== */
+  .splash{
+    position:fixed; inset:0; z-index:9999;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    transition:opacity .6s ease, visibility .6s ease;
+  }
+  .splash.gone{opacity:0; visibility:hidden; pointer-events:none}
+  .splash-bg{
+    position:absolute; inset:0; overflow:hidden; pointer-events:none;
+    background-size:cover; background-position:center; background-repeat:no-repeat;
+    background-image:linear-gradient(135deg, #0d0c0f 0%, #1a1620 50%, #0d0c0f 100%);
+  }
+  .splash-bg::after{
+    content:""; position:absolute; inset:0;
+    background:rgba(0,0,0,.35);
+  }
+  .splash-content{position:relative; text-align:center; z-index:1; transition:opacity .4s ease}
+  .splash.has-wallpaper .splash-content{opacity:0; pointer-events:none}
+  .splash-icon{
+    width:96px; height:96px; border-radius:24px;
+    background:#E0A02F; display:inline-flex; align-items:center; justify-content:center;
+    margin-bottom:28px;
+    box-shadow:0 8px 40px rgba(224,160,47,.3);
+    animation:splashPulse 2.8s ease-in-out infinite;
+  }
+  .splash-icon svg{width:44px; height:44px; fill:#131210}
+  @keyframes splashPulse{
+    0%,100%{transform:scale(1); box-shadow:0 8px 40px rgba(224,160,47,.25)}
+    50%{transform:scale(1.07); box-shadow:0 14px 55px rgba(224,160,47,.45)}
+  }
+  .splash h1{font-size:30px; font-weight:700; color:#f2efe9; margin-bottom:10px; letter-spacing:.04em; text-shadow:0 2px 12px rgba(0,0,0,.5)}
+  .splash .sub{font-size:14px; color:rgba(242,239,233,.7); letter-spacing:.12em; text-shadow:0 1px 8px rgba(0,0,0,.5)}
+  .splash .tap-hint{
+    margin-top:40px; font-size:13px; color:rgba(242,239,233,.5);
+    animation:splashBlink 2.2s ease-in-out infinite;
+  }
+  @keyframes splashBlink{
+    0%,100%{opacity:.35}
+    50%{opacity:.85}
+  }
+  /* 壁纸控制按钮 */
+  .wp-btn{
+    position:absolute; bottom:24px; right:24px; z-index:2;
+    display:flex; align-items:center; gap:7px;
+    padding:10px 16px; border-radius:999px;
+    background:rgba(0,0,0,.45); backdrop-filter:blur(8px);
+    color:#f2efe9; font-size:13px; cursor:pointer;
+    transition:background .15s, opacity .15s;
+  }
+  .wp-btn:hover{background:rgba(0,0,0,.65)}
+  .wp-btn svg{width:18px; height:18px; flex-shrink:0}
+  .wp-reset{
+    position:absolute; bottom:24px; right:24px; z-index:2;
+    width:38px; height:38px; border-radius:50%;
+    background:rgba(0,0,0,.45); backdrop-filter:blur(8px);
+    color:#f2efe9; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; transition:background .15s;
+    opacity:0; pointer-events:none;
+  }
+  .wp-reset.show{opacity:1; pointer-events:auto}
+  .wp-reset:hover{background:rgba(0,0,0,.65)}
+  .wp-reset svg{width:16px; height:16px}
+
+  @media (max-width:900px){
+    .app{grid-template-columns:1fr;grid-template-rows:minmax(0,54vh) minmax(0,46vh)}
+    .player-panel{border-right:none;border-bottom:1px solid var(--line)}
+    .wall-head{flex-wrap:wrap}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<!-- ===== 启动首页 ===== -->
+<div class="splash" id="splash">
+  <div class="splash-bg" id="splashBg"></div>
+  <div class="splash-content">
+    <div class="splash-icon">
+      <svg viewBox="0 0 24 24"><path d="M9.5 7.5v9l7.5-4.5z"/></svg>
+    </div>
+    <h1>短视频收藏播放器</h1>
+    <p class="sub">Short Video Player</p>
+    <div class="tap-hint">点击任意位置进入</div>
+  </div>
+  <button class="wp-btn" id="wpBtn" title="选择本机图片作为壁纸">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+    切换壁纸
+  </button>
+  <button class="wp-reset" id="wpReset" title="恢复默认背景">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+  </button>
+</div>
+
+<div class="app">
+
+  <!-- ===== 左侧播放器 ===== -->
+  <section class="panel player-panel">
+    <div class="stage" id="stage">
+      <video id="video" autoplay muted playsinline preload="metadata"></video>
+      <div class="nowtag"><span>正在播放</span><b id="nowIdx">0</b><span>/</span><span id="nowTotal">0</span></div>
+      <button class="mute-btn" id="muteBtn" title="静音/取消静音" aria-label="静音切换">
+        <svg id="muteSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none"/><path d="M23 9l-6 6M17 9l6 6"/></svg>
+      </button>
+      <button class="sound-hint" id="soundHint" hidden>点击开启声音</button>
+    </div>
+    <div class="bottom-ui show" id="bottomUI">
+    <div class="meta"><div class="fname"><span class="idx" id="metaIdx">—</span><span id="fname">请先选择文件</span></div></div>
+    <div class="timeline">
+      <span class="t" id="tCur">0:00</span>
+      <input type="range" class="seek" id="seek" min="0" max="0" value="0" step="0.05">
+      <span class="t" id="tDur">0:00</span>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" id="playBtn" title="播放/暂停 (空格)">
+        <svg id="playSvg" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><span id="playTxt">播放</span>
+      </button>
+      <button class="ctrl-btn" id="prevBtn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14l-11-7z"/></svg>上一个
+      </button>
+      <button class="ctrl-btn" id="nextBtn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>下一个
+      </button>
+      <button class="ctrl-btn" id="autoBtn" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3l2-5 3 10 2-5h4"/></svg>
+        <span id="autoTxt">自动连播</span>
+      </button>
+      <div class="spacer"></div>
+      <span class="count" id="countInfo">0 / 0</span>
+      <button class="ctrl-btn" id="fsBtn" title="全屏">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+      </button>
+    </div>
+    </div>
+  </section>
+
+  <!-- ===== 右侧缩略图墙 ===== -->
+  <section class="panel wall-panel">
+    <div class="wall-head">
+      <h1>短视频收藏<span class="dot">·</span></h1>
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="searchInput" type="text" placeholder="搜索文件名…" autocomplete="off">
+      </div>
+      <span class="n" id="shownCount">0 条</span>
+      <button class="pick-btn" id="pickFilesBtn" title="在文件夹里挑选个别视频文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg>选择文件
+      </button>
+      <button class="pick-btn alt" id="pickDirBtn" title="选择整个文件夹，可删除本地文件">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>选择文件夹
+      </button>
+    </div>
+    <div class="wall-scroll scrollbar" id="wallScroll">
+      <div class="grid" id="grid"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ===== 右键菜单 ===== -->
+<div class="ctxmenu" id="ctxMenu" hidden>
+  <div class="ctx-item danger" id="ctxDelete">删除本地文件</div>
+  <div class="ctx-item" id="ctxCancel">取消</div>
+</div>
+
+<!-- ===== 空态 / 拖放遮罩 ===== -->
+<div class="overlay" id="overlay">
+  <div class="welcome">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="36" height="36"><rect x="2" y="4" width="20" height="14" rx="3"/><path d="M6 4l2 3h8l2-3M3 20l6-6 4 4 3-3 5 5"/></svg>
+    </div>
+    <h2>挑选你的短视频文件</h2>
+    <p>挑一些视频文件，页面会<b>自动生成缩略图并连续播放</b>。放在任何装有短视频的文件夹都能用。</p>
+    <button class="big" id="pickFilesBtn2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M13 2v7h7"/></svg>选择文件
+    </button>
+    <div class="tip">或直接把视频拖到页面任意位置 · 支持 mp4 / webm / mov 等</div>
+  </div>
+</div>
+
+<script src="player.js"></script>
+</body>
+</html>
